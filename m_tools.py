@@ -156,7 +156,14 @@ def heatmap_draw(n_list):
 
 
     plt.show()
-    
+
+def hebing(xiangl1, n, xiangl2):
+    xiangl3 = []
+    for (i, j) in zip(xiangl1, xiangl2):
+        x = (i * n + j) / (n + 1)
+        xiangl3.append(x)
+    return xiangl3
+
 if __name__=="__main__":
     n_list=[]
     n_list2=[]

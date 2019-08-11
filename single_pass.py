@@ -6,28 +6,45 @@
 @Date   ：2019/7/1 14:42
 =================================================='''
 import time
-from m_tools import*
+
 from feather_represent import*
-from data_process import*
-from numpy import zeros
+from data_process import make_news_list
+
+from m_tools import*
+
+
 
 if __name__ == "__main__":
-    m_dimension=3500
-    zero_vector = zeros([1, m_dimension])[0].tolist()
-    cluster_id = {}
+    # 设置向量长度
+    vec_dimension=3500
+    w2v_dimension=200
+
+    # 设置零向量
+    zero_vector = zero_vec(vec_dimension)
+
+    # cluster_id = {}
+    # 读取测试数据
     pd_data = pd.read_csv('./test_set_451.csv', encoding='utf_8_sig')
+
     #分词、拼接，生成二维数组
     stopwords_path='./stepwords/stopword_chuli.txt'
+
     # 为便于二次使用可进行固化
     news_list = make_news_list(pd_data,stopwords_path)
-    houxuanci_path="./vocabu/5_27_vocabu_list_"+str(m_dimension)+".txt"
+
+    houxuanci_path = "./vocabu/5_27_vocabu_list_"+str(vec_dimension)+".txt"
+
+    boc_icf_path="./boc_icf_" + str(w2v_dimension) + "_w2v/boc_icf_" + str(vec_dimension) + "_feather.txt", "wb"
+
+    LDA_path='./lda/model_'+str(vec_dimension)+'_5_24.model'
     #文档表示
     method = "W2V"
     a = time.clock()
-    news_represent = Represent(news_list,method,m_dimension,houxuanci_path)
+    news_represent = Represent(news_list,method,vec_dimension,w2v_dimension,houxuanci_path,LDA_path,boc_icf_path)
     after_news_list_l2 = getL2(news_represent)
     b = time.clock()
     print(b - a)
+
     # expand TF-IDF
     # a = time.time()
     # word_vec_dict_tfidf = expand_tfidf_vectors(news_list)

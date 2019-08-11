@@ -8,12 +8,16 @@
 import pymysql
 import pandas as pd
 import re
+import operator
 import jieba
 import jieba.analyse
 import multiprocessing
+import pickle
 from tqdm import tqdm
 from m_tools import *
 from w2v import Word2VecModel
+from gensim import corpora
+from gensim.models import LdaModel
 
 jieba.load_userdict("./userdict/user_dict.txt")
 jieba.load_userdict("./userdict/p2p.txt")
@@ -254,7 +258,7 @@ def getdata_test():
 
 
 # 生成新闻列表
-def make_news_list(pd_d,stopwords_path):
+def make_news_list(pd_d,stopwords_path,result_path):
     print("………………………………………………………………\n\n")
     print("加载数据并分词：")
     stopwords_list = stopwordslist(stopwords_path)
@@ -272,15 +276,15 @@ def make_news_list(pd_d,stopwords_path):
         x = pd_d.loc[index]
         text = 3*x["title_cut"] + x["content_cut"]
         news_list.append(list(text.split()))
-    # f_f=open("fenci_4_3.txt","wb")
-    # pickle.dump(news_list,f_f)
-    # f_f.close()
+    # 固化，便于之后的使用
+    f_f=open(result_path,"wb")
+    pickle.dump(news_list,f_f)
+    f_f.close()
     return news_list
 
 
-# 生成候选词
+# 生成候选词并保存
 def vocubu_all(all_docs):
-    #all_docs = pd.read_csv('./news_train_234.csv', encoding='utf_8_sig')
     all_docs["news_title"]=all_docs["news_title"].astype(str)
     all_docs["news_content"]=all_docs["news_content"].astype(str)
     all_docs['title_cut'] = all_docs['news_title'].apply(lambda x: ''.join(filter(lambda ch: ch not in ' \t◆#%', x)))
@@ -323,27 +327,26 @@ def vocubu_all(all_docs):
         vocabu_dict.write("\n")
     vocabu_dict.close()
     vocabu_list.close()
-    # print(len(m_dict_weight_word))
-    # print(len(m_dict_POS_word))
-    # print(vocabu[0:10])
 
-def vocabu2(len_list):
-    f = open("./vocabu/vocabu_list_all.txt", "r", encoding="utf_8_sig")
+
+# 生成候选词
+def vocabu2(len_list,stopwords_path,houxuanci_path):
+    f_all = open("./vocabu/vocabu_list_all.txt", "r", encoding="utf_8_sig")
     word_list = []
-    stopwords = [line.strip() for line in
-                 open("./stepwords/stopword_chuli.txt", 'r', encoding='utf_8_sig').readlines()]
+    stopwords = [l.strip() for l in
+                 open(stopwords_path, 'r', encoding='utf_8_sig').readlines()]
     for line in f.readlines():
         if line.strip() not in stopwords:
             word_list.append(line.strip())
-    f.close()
-    list_sample = word_list[0:len_list]
-    f1 = open("./vocabu/7_3_vocabu_list_" + str(len_list) + ".txt", "w", encoding="utf_8_sig")
-    for line in list_sample:
-        f1.write(line)
+    f_all.close()
+    list_sample=word_list[0:len_list]
+
+    # 将候选词固化
+    f1 = open(houxuanci_path, "w", encoding="utf_8_sig")
+    for l in list_sample:
+        f1.write(l)
         f1.write("\n")
     f1.close()
-
-
 
 
 def train_embedding(news_list,dimension):
@@ -353,21 +356,129 @@ def train_embedding(news_list,dimension):
     w2vModel.save_model()
 
 
-if __name__=="__main__":
-    dimension = 2000
-    stopwords_path='./stepwords/stepwords.txt'
-    stopwords_path2='./stepwords/stopword_chuli.txt'
-    train_data = getdata_train()
-    test_data = getdata_test()
-    news_list=make_news_list(train_data,stopwords_path)
+# 单词查表向量化
+def word_cluster(words_number,stopwords_path2,houxuanci_path):
+    m_dict={}
+    a = Word2VecModel()
+    a.load_embedding()
+    w2vmodel = a.get_embedding()
+    x_normalized = normalize(w2vmodel, norm='l2', axis=0)
+    w2vvocabu = a.get_vocabu()
+    stopwords = [line.strip() for line in
+                 open(stopwords_path2, 'r',encoding='utf_8_sig').readlines()]
+    for weight, w in zip(x_normalized, w2vvocabu):
+        if w in stopwords or w == "":
+            continue
+        else:
+            m_dict[w] = weight
+    del x_normalized,w2vvocabu,w2vmodel
+    gc.collect()
+    f = open(houxuanci_path+str(words_number)+".txt","r",encoding="utf_8_sig")
+    word_list = {}
+    for line in f.readlines():
+        if line.strip() in m_dict:
+            word_list[line.strip()]=m_dict[line.strip()].tolist()
+        else:
+            continue
+    f.close()
+    return word_list
 
-    train_embedding(news_list,dimension)
+# 对单词进行single-pass聚类
+def single_pass_word(word_vec_dict,zero_vector,boundary):
+    cluster_num = 0
+    count_i = 0
+    cluster_all = {}
+    cluster_center = {}
+    for term, word_vec in tqdm(word_vec_dict.items()):
+        cluster_file = {}
+        cos_dict = {}
+        # 排除零向量的干扰
+        now_words = word_vec_dict[term]
+        if (operator.eq(now_words, zero_vector)):
+            continue
+        if (count_i == 0):  # 当前新闻为第一个
+            cluster_file[term] = now_words  # 加入聚类结果
+            cluster_center[cluster_num] = now_words
+            cluster_all[cluster_num] = cluster_file
+            cluster_num = cluster_num + 1
+            count_i = count_i + 1
+            continue
+        for c_id in cluster_all.keys():
+            cos1 = get_cossim(now_words, cluster_center.get(c_id))
+            cos_dict[c_id] = cos1
+        cos_dict = sorted(cos_dict.items(), key=lambda x: x[1], reverse=True)
+        max_cos = cos_dict[0][1]
+        max_cos_id = cos_dict[0][0]
+        if max_cos > boundary:
+            cluster_center[max_cos_id] = hebing(cluster_center[max_cos_id], len(cluster_all[max_cos_id]), now_words)
+            cluster_file = cluster_all.get(max_cos_id)
+            cluster_file[term] = now_words  # 加入聚类结果
+            cluster_all[max_cos_id] = cluster_file
+            count_i = count_i + 1
+            continue
+        else:
+            cluster_file[term] = now_words  # 加入聚类结果
+            cluster_all[cluster_num] = cluster_file
+            cluster_center[cluster_num] = now_words
+            cluster_num = cluster_num + 1
+            count_i = count_i + 1
+    return cluster_all
+
+# 打印词聚类结果
+def printout(cluster_all,result_path):
+    f = open(result_path, mode="w", encoding="utf-8")
+    for i in cluster_all.keys():
+        for j in cluster_all.get(i):
+            f.write(str(j)+" ")
+        f.write("\n")
+    f.close()
+
+def LDA_train(train,vec_dimension,LDA_path):
+    print(len(train))
+    # print(' '.join(train[2]))
+    dictionary = corpora.Dictionary(train)
+    corpus = [dictionary.doc2bow(text) for text in train]
+    lda = LdaModel(corpus=corpus, id2word=dictionary, num_topics=vec_dimension)
+    lda.save(LDA_path)
+
+if __name__=="__main__":
+    # 设置文档向量长度
+    vec_dimension = 2000
+    # 词向量长度
+    w2v_dimensin = 200
+    # 停用词1路径
+    stopwords_path1='./stepwords/stepwords.txt'
+    # 停用词2路径
+    stopwords_path2='./stepwords/stopword_chuli.txt'
+    # 从数据库获取训练数据
+    train_data = getdata_train()
+    # 从数据库获取测试数据
+    test_data = getdata_test()
+
+    # 生成训练新闻列表
+    result_path="news_list_after.txt"
+    news_list = make_news_list(train_data,stopwords_path1,result_path)
+
+    # 训练词向量
+    train_embedding(news_list,w2v_dimensin)
+    # 训练LDA
+    LDA_path='./lda/model_' + str(vec_dimension) + '.model'
+    LDA_train(news_list,vec_dimension,LDA_path)
 
     # 构建所有候选词词典
     vocubu_all(train_data)
 
-    # 挑选一定数量的候选词
-    vocabu2(dimension)
+    # 挑选一定数量的候选词构建词典并固化
+    houxuanci_path = "./vocabu/5_27_vocabu_list_"+str(vec_dimension)+".txt" # 路径
+    vocabu2(vec_dimension,stopwords_path1,houxuanci_path)
+
+    # 以下为BOS方式必要步骤
+    # 词聚类
+    m_boundary = 0.7
+    word_list=word_cluster(vec_dimension,stopwords_path2,houxuanci_path)
+    result_path="./result/5_27_"+str(vec_dimension)+"_words_cluster_result" + str(m_boundary) + ".txt"
+    cluster_all = single_pass_word(word_list, zero_vec(w2v_dimensin), m_boundary)
+    printout(cluster_all,result_path)
 
 
 

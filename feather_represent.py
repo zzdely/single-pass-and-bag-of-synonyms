@@ -17,7 +17,7 @@ from gensim.models import LdaModel
 from bocmodel import BOCModel
 
 class Represent(object):
-    def __init__(self, news_list, method, dimension,houxuancci_path):
+    def __init__(self, news_list, method, vec_dimension,w2v_dimension,houxuanci_path,LDA_path,boc_icf_path):
         '''
         :param news_list: the news_list waiting process
         :param method: can choose TF-IDF
@@ -25,8 +25,20 @@ class Represent(object):
         '''
         self.news_list = news_list
         self.method = method
-        self.dimension = dimension
-        self.houxuanci=houxuancci_path
+        self.vec_dimension = vec_dimension
+        self.w2v_dimension = w2v_dimension
+        self.houxuanci = None
+        self.LDA_path = None
+        self.BOC_path= None
+
+        if self.method=="LDA":
+            self.LDA_path=LDA_path
+
+        if self.method=="BOS":
+            self.houxuanci = houxuanci_path
+
+        if self.method=="BOC":
+            self.BOC_path=boc_icf_path
 
     def get_tf_idf_sklearn(self):
         '''
@@ -74,13 +86,27 @@ class Represent(object):
                         word_list.append(m_dict[word])
                     else:
                         continue
-            word_sum = zero_vec(self.dimension)
+            word_sum = zero_vec(self.vec_dimension)
             for words in word_list:
                 word_sum += words
             word_sum = word_sum / len(word_list)
             news_vec_list.append(word_sum.tolist())
 
         return news_vec_list
+
+    # LDA文档表示
+    def get_lda_vec(self, LDA_PATH):
+        lda = LdaModel.load(LDA_PATH)
+        news_lda_list = []
+        dictionary = corpora.Dictionary(self.news_list)
+        corpus = [dictionary.doc2bow(text) for text in self.news_list]
+        doc_lda = lda[corpus]
+        for topic in doc_lda:
+            news_vec_lda = [0] * self.vec_dimension
+            for i in topic:
+                news_vec_lda[i[0]] = float(i[1])
+            news_lda_list.append(news_vec_lda)
+        return news_lda_list
 
     # tf-idf提特征
     def tf_idf_vectors(self):
@@ -99,7 +125,7 @@ class Represent(object):
         tf_idf_newslist = []
         for i in tqdm(self.news_list):
             after_process=[]
-            voc_dict = [0.] * self.dimension
+            voc_dict = [0.] * self.vec_dimension
             # 压缩单个文本长度（只保留候选词，减少总词频）
             for j in i:
                 if j in vocabu_l:
@@ -115,20 +141,8 @@ class Represent(object):
             tf_idf_newslist.append(voc_dict)
         return tf_idf_newslist
 
-    def get_lda_vec(self):
-        lda = LdaModel.load('./lda/model_100_5_24.model')
-        news_lda_list = []
-        dictionary = corpora.Dictionary(self.news_list)
-        corpus = [dictionary.doc2bow(text) for text in self.news_list]
-        doc_lda = lda[corpus]
-        for topic in doc_lda:
-            news_vec_lda = [0] * self.dimension
-            for i in topic:
-                news_vec_lda[i[0]] = float(i[1])
-            news_lda_list.append(news_vec_lda)
-        return news_lda_list
-
-    def get_feather_boc(self,w_dimension):
+    # boc-icf表示文档
+    def get_feather_boc(self):
         corpus=[]
         for i in self.news_list:
             corpus.append(" ".join(i))
@@ -146,14 +160,13 @@ class Represent(object):
                 wv.append(w)
                 idx_to_vocab2.append(voc)
         wv=np.array(wv)
-        k_num=self.dimension
         print("获取boc-icf表示")
-        model = BOCModel(wv, idx_to_vocab=idx_to_vocab2,n_concepts=k_num,min_count=5)
+        model = BOCModel(wv, idx_to_vocab=idx_to_vocab2,n_concepts=self.vec_dimension,min_count=5)
         # get icf represent
         boc = model.transform(corpus,apply_icf=True)
 
         boc_ndnarry=boc.todense()
-        f_feather = open("./boc_icf_"+str(w_dimension)+"_w2v/boc_icf_"+str(k_num)+"_feather_5_26.txt", "wb")
+        f_feather = open("./boc_icf_"+str(self.w2v_dimension)+"_w2v/boc_icf_"+str(self.vec_dimension)+"_feather.txt", "wb")
         pickle.dump(boc_ndnarry, f_feather)
         f_feather.close()
         return boc_ndnarry.tolist()
@@ -215,7 +228,8 @@ class Represent(object):
     #     return tf_idf_newslist
 
     # tf-idf提特征
-    def expand_tfidf_vectors(self):
+    def BOS_vectors(self):
+
         vocabu_l = []
         concept_l=[]
         with open("./vocabu/5_27_vocabu_list_5500.txt",mode="r",encoding="utf-8") as f:
@@ -297,7 +311,7 @@ def getL2(Represent):
     print("………………………………………………………………\n")
     print("获取文档特征表示：")
     news_represent=[]
-    w_dimension=100
+
     if Represent.method == "TF-IDF":
         news_represent=Represent.tf_idf_vectors()
 
@@ -308,10 +322,12 @@ def getL2(Represent):
         news_represent = Represent.get_lda_vec()
 
     elif Represent.method == "BOC":
-        news_represent=Represent.get_feather_boc(w_dimension)
+        news_represent=Represent.get_feather_boc(Represent.vec_dimension)
 
-    elif Represent.method == "E-TF-IDF":
-        news_represent = Represent.expand_tf_idf()
+    elif Represent.method == "BOS":
+        m_boundary = 0.7
+        result_path = "./result/5_27_" + str(Represent.vec_dimension) + "_words_cluster_result" + str(m_boundary) + ".txt"
+        news_represent = Represent.BOS_vectors(Represent.vec_dimension)
 
     else:
         print("Please input the right method")
