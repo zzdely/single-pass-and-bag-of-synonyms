@@ -6,13 +6,13 @@
 @Date   ：2019/6/29 21:23
 =================================================='''
 import pymysql
-import pandas as pd
 import re
 import operator
 import jieba
 import jieba.analyse
 import multiprocessing
 import pickle
+import pandas as pd
 from tqdm import tqdm
 from m_tools import *
 from w2v import Word2VecModel
@@ -93,7 +93,11 @@ def getdata_train():
         for i in sub_list:
             j = re.sub(i, "", j)
         info2.append(j)
-    print(count)
+        j = re.sub(r'上午', "", j, 1)
+        j = re.sub(r'下午', "", j, 1)
+        j = re.sub(r'晚间', "", j, 1)
+        j = re.sub(r'凌晨', "", j, 1)
+    # print(count)
 
     # 读取新闻发布时间（排序依据）
     aa3 = cursor.execute("select news_pubtime from news_2_3_4_copy")
@@ -194,10 +198,13 @@ def getdata_test():
         j = re.sub(r'(微信公众号“[\u4e00-\u9fa5]{2,10}”)', "", j)
         j = re.sub(r'((?:本报记者 )[\u4e00-\u9fa5]{2,3})', "", j)
         j = re.sub(r'([\u4e00-\u9fa5]{2,4}(?:日报))', "", j)
-
         for i in sub_list:
             j = re.sub(i, "", j)
             j = j.lower()
+        j = re.sub(r'上午',"",j,1)
+        j = re.sub(r'下午', "", j, 1)
+        j = re.sub(r'晚间', "", j, 1)
+        j = re.sub(r'凌晨', "", j, 1)
         info2.append(j)
 
     # 读取新闻发布时间（排序依据）
@@ -335,7 +342,7 @@ def vocabu2(len_list,stopwords_path,houxuanci_path):
     word_list = []
     stopwords = [l.strip() for l in
                  open(stopwords_path, 'r', encoding='utf_8_sig').readlines()]
-    for line in f.readlines():
+    for line in f_all.readlines():
         if line.strip() not in stopwords:
             word_list.append(line.strip())
     f_all.close()
@@ -350,14 +357,14 @@ def vocabu2(len_list,stopwords_path,houxuanci_path):
 
 
 def train_embedding(news_list,dimension):
-    print("hello")
+    print("Train embedding")
     w2vModel = Word2VecModel(size=dimension, min_count=5, workers=(multiprocessing.cpu_count()-2))
     w2vModel.train_model(news_list)
     w2vModel.save_model()
 
 
 # 单词查表向量化
-def word_cluster(words_number,stopwords_path2,houxuanci_path):
+def get_word_list(stopwords_path2,houxuanci_path):
     m_dict={}
     a = Word2VecModel()
     a.load_embedding()
@@ -373,7 +380,7 @@ def word_cluster(words_number,stopwords_path2,houxuanci_path):
             m_dict[w] = weight
     del x_normalized,w2vvocabu,w2vmodel
     gc.collect()
-    f = open(houxuanci_path+str(words_number)+".txt","r",encoding="utf_8_sig")
+    f = open(houxuanci_path,"r",encoding="utf_8_sig")
     word_list = {}
     for line in f.readlines():
         if line.strip() in m_dict:
@@ -443,42 +450,55 @@ def LDA_train(train,vec_dimension,LDA_path):
 
 if __name__=="__main__":
     # 设置文档向量长度
-    vec_dimension = 2000
+    vec_dimension = 500
     # 词向量长度
-    w2v_dimensin = 200
+    w2v_dimensin = 50
     # 停用词1路径
-    stopwords_path1='./stepwords/stepwords.txt'
+    stopwords_path1='./stopwords/stopwords.txt'
     # 停用词2路径
-    stopwords_path2='./stepwords/stopword_chuli.txt'
+    stopwords_path2='./stopwords/stopword_chuli.txt'
     # 从数据库获取训练数据
-    train_data = getdata_train()
+    # train_data = getdata_train()
+    # 读取生成的结果
+    train_data = pd.read_csv('./news_train_234.csv', encoding='utf_8_sig')
     # 从数据库获取测试数据
-    test_data = getdata_test()
+    # test_data = getdata_test()
+    # 读取生成的结果
+    test_data = pd.read_csv('./test_set_451.csv', encoding='utf_8_sig')
 
     # 生成训练新闻列表
     result_path="news_list_after.txt"
-    news_list = make_news_list(train_data,stopwords_path1,result_path)
+    # news_list = make_news_list(train_data,stopwords_path1,result_path)
+
+    # 读取固化结果
+    fr = open(result_path, 'rb')
+    news_list = pickle.load(fr)
+    fr.close()
 
     # 训练词向量
-    train_embedding(news_list,w2v_dimensin)
-    # 训练LDA
-    LDA_path='./lda/model_' + str(vec_dimension) + '.model'
-    LDA_train(news_list,vec_dimension,LDA_path)
+    # train_embedding(news_list,w2v_dimensin)
 
-    # 构建所有候选词词典
-    vocubu_all(train_data)
+
+    # 训练LDA
+    # LDA_path='./lda/model_' + str(vec_dimension) + '.model'
+    # LDA_train(news_list,vec_dimension,LDA_path)
+
+    # 构建所有候选词词典，固化
+    # vocubu_all(train_data)
 
     # 挑选一定数量的候选词构建词典并固化
     houxuanci_path = "./vocabu/5_27_vocabu_list_"+str(vec_dimension)+".txt" # 路径
-    vocabu2(vec_dimension,stopwords_path1,houxuanci_path)
+    # vocabu2(vec_dimension,stopwords_path1,houxuanci_path)
 
     # 以下为BOS方式必要步骤
     # 词聚类
     m_boundary = 0.7
-    word_list=word_cluster(vec_dimension,stopwords_path2,houxuanci_path)
+    word_list=get_word_list(stopwords_path2,houxuanci_path)
     result_path="./result/5_27_"+str(vec_dimension)+"_words_cluster_result" + str(m_boundary) + ".txt"
     cluster_all = single_pass_word(word_list, zero_vec(w2v_dimensin), m_boundary)
     printout(cluster_all,result_path)
+
+
 
 
 
