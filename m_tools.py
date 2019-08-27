@@ -15,6 +15,8 @@ from sklearn.preprocessing import normalize
 from w2v import Word2VecModel
 from matplotlib import pyplot as plt
 import seaborn as sns
+
+
 # average-link策略（即取平均相似度作为向量与簇的相似度）
 def getaveragelink(cos_list):
     sum_v = 0
@@ -132,15 +134,10 @@ def heatmap_draw(n_list):
 
     f,ax= plt.subplots(figsize=(20, 50))
     np.random.seed(20180316)
-    #arr_region = np.random.choice(region, size=(50,))
     list_region = region
 
-    #arr_kind = np.random.choice(kind, size=(50,))
     list_kind = kind
 
-    #values = np.random.randint(-1, 1, 2600)
-    #print(values)
-    #values=np.array()
     list_values = list(values)
     cmap = sns.cubehelix_palette(start = 1.5, rot = 3, gamma=0.8, as_cmap = True)
 
@@ -173,31 +170,4 @@ if __name__=="__main__":
             for i in line.strip().split():
                 n_list2.append(i)
 
-    # Get an example dataset from seaborn
-
-
-
     heatmap_draw(n_list2)
-# # cos计算1
-# def cossim(vector_a, vector_b):
-#     vector_a = np.mat(vector_a)
-#     vector_b = np.mat(vector_b)
-#     num = float(vector_a * vector_b.T)
-#     denom = np.linalg.norm(vector_a) * np.linalg.norm(vector_b)
-#     sim = num / denom
-#     return sim
-#
-#
-# # cos计算2
-# def cos(vector1, vector2):
-#     dot_product = 0.0
-#     normA = 0.0
-#     normB = 0.0
-#     for a, b in zip(vector1, vector2):
-#         dot_product += a * b
-#         normA += a ** 2
-#         normB += b ** 2
-#     if normA == 0.0 or normB == 0.0:
-#         return None
-#     else:
-#         return dot_product / ((normA * normB) ** 0.5)

@@ -232,11 +232,11 @@ class Represent(object):
 
         vocabu_l = []
         concept_l=[]
-        with open("./vocabu/5_27_vocabu_list_5500.txt",mode="r",encoding="utf-8") as f:
+        with open("./vocabu/5_27_vocabu_list_500.txt",mode="r",encoding="utf-8") as f:
             for i in f:
                 i = i.strip()
                 vocabu_l.append(i)
-        with open("./result/5_27_5500_cijuleijieguo——yuan0.7.txt", mode="r", encoding="utf-8") as f2:
+        with open("./result/5_27_500_words_cluster_result0.7.txt", mode="r", encoding="utf-8") as f2:
             for i in f2:
                 i = i.strip().split()
                 concept_l.append(i)
@@ -324,10 +324,10 @@ def getL2(Represent):
     elif Represent.method == "BOC":
         news_represent=Represent.get_feather_boc(Represent.vec_dimension)
 
-    elif Represent.method == "BOS":
-        m_boundary = 0.7
-        result_path = "./result/5_27_" + str(Represent.vec_dimension) + "_words_cluster_result" + str(m_boundary) + ".txt"
-        news_represent = Represent.BOS_vectors(Represent.vec_dimension)
+    # elif Represent.method == "BOS":
+    #     m_boundary = 0.7
+    #     result_path = "./result/5_27_" + str(Represent.vec_dimension) + "_words_cluster_result" + str(m_boundary) + ".txt"
+    #     news_represent = Represent.BOS_vectors(Represent.vec_dimension)
 
     else:
         print("Please input the right method")

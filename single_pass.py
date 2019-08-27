@@ -144,12 +144,13 @@ if __name__ == "__main__":
 
     houxuanci_path = "./vocabu/5_27_vocabu_list_"+str(vec_dimension)+".txt"
 
-    boc_icf_path="./boc_icf_" + str(w2v_dimension) + "_w2v/boc_icf_" + str(vec_dimension) + "_feather.txt", "wb"
+    boc_icf_path="./boc_icf_" + str(w2v_dimension) + "_w2v/boc_icf_" + str(vec_dimension) + "_feather.txt"
 
     LDA_path='./lda/model_'+str(vec_dimension)+'_5_24.model'
 
-    #文档表示
+    #文档表示，可选参数有：TF-IDF,W2V,LDA,BOC,BOS
     method = "W2V"
+
     a = time.clock()
     news_represent = Represent(news_list,method,vec_dimension,w2v_dimension,houxuanci_path,LDA_path,boc_icf_path)
     after_news_list_l2 = getL2(news_represent)
