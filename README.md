@@ -28,5 +28,3 @@ method="BOC"
 
 其他说明：
 模型由于较大，未放置在作业提交中，相关训练代码在data_process.py中，需要可自行训练。
-
-本项目github地址为：https://github.com/zzdely/single-pass-and-bag-of-synonyms 后期根据论文需要会继续更新
